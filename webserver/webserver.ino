@@ -7,7 +7,9 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include "includes/server_pages.h"
+#include "includes/utils.h"
 
+//const char *ssid = "acc3ss_p0int";
 const char *ssid = "acc3ss_p0int";
 // const char *ssid = "acc3ss_p0int";
 const char *password = "p@ssw0rd";
@@ -52,15 +54,22 @@ void loop()
 
 void connect_access_point()
 {
+	Serial.println("");
 	// make connection to access point
 	Serial.print("Connecting to ");
 	Serial.print(ssid);
 	Serial.println(" ");
 	WiFi.begin(ssid, password);
 
+	int timer = 0;
 	// print connecting message until wifi is connected!
 	while (WiFi.status() != WL_CONNECTED)
 	{
+		timer += 500;
+		if (timer == 60000)
+		{
+			ESP.reset();
+		}
 		Serial.print(".");
 		digitalWrite(WiFi_Indicator, !digitalRead(WiFi_Indicator));
 		delay(500);
@@ -88,6 +97,29 @@ void route()
 	});
 	// handle root route -> send hello world! for example
 	server.on("/", []() -> void {
-		server.send(200, "text/html", "<h1>Hello, World!</h1>");
+		server.send(200, "text/html", svr_builtin::page_home(server.uri(), WiFi.localIP(), Server_Port));
+	});
+	// handle control requests
+	server.on("/api", []() -> void {
+		if (server.args() == 4)
+		{
+			int servo_1 = server.arg("servo_1").toInt();
+			int servo_2 = server.arg("servo_2").toInt();
+			int servo_3 = server.arg("servo_3").toInt();
+			// analog output 0 ~ 255
+			// servo input 0 ~ 180
+			// formula
+			// 255 => 180;
+			// x => (x / 255) * 180
+			int servo_1_analog = servo2analog(servo_1);
+			int servo_2_analog = servo2analog(servo_2);
+			int servo_3_analog = servo2analog(servo_3);
+			String main_motor = server.arg("main_motor");
+
+		}
+		else
+		{
+			server.send(422, "text/html", svr_builtin::page_422(server.uri(), WiFi.localIP(), Server_Port));
+		}
 	});
 }
