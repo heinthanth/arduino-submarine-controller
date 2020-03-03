@@ -7,16 +7,20 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include "includes/server_pages.h"
-#include "includes/utils.h"
 
-//const char *ssid = "acc3ss_p0int";
-const char *ssid = "acc3ss_p0int";
-// const char *ssid = "acc3ss_p0int";
-const char *password = "p@ssw0rd";
+const char *ssid = "4cc3ss p0int h3r3";
+const char *password = "p@ssw0rd5 h3r3";
 
 const int WiFi_Indicator = 2;
 const int Server_Indicator = 16;
 const int Server_Port = 80;
+
+// change pin here
+const int servo_1_pin = 0;
+const int servo_2_pin = 0;
+const int servo_3_pin = 0;
+const int main_motor_pin = 0;
+const int main_motor_direction_pin = 0;
 
 // init server with port
 ESP8266WebServer server(Server_Port);
@@ -24,9 +28,6 @@ ESP8266WebServer server(Server_Port);
 void setup()
 {
 	Serial.begin(9600);
-
-	pinMode(WiFi_Indicator, OUTPUT);
-	pinMode(Server_Indicator, OUTPUT);
 
 	init_board();
 	connect_access_point();
@@ -44,7 +45,7 @@ void setup()
 	Serial.print(":");
 	Serial.print(Server_Port);
 	Serial.println("/ ...");
-	digitalWrite(Server_Indicator, 0x0);
+	digitalWrite(Server_Indicator, LOW);
 }
 
 void loop()
@@ -65,17 +66,21 @@ void connect_access_point()
 	// print connecting message until wifi is connected!
 	while (WiFi.status() != WL_CONNECTED)
 	{
-		timer += 500;
+		// if ESP can't connect with AP within 60s, will reset.
 		if (timer == 60000)
 		{
+			Serial.print("Cannot connect to ");
+			Serial.print(ssid);
+			Serial.println(". Restarting ...");
 			ESP.reset();
 		}
 		Serial.print(".");
 		digitalWrite(WiFi_Indicator, !digitalRead(WiFi_Indicator));
+		timer += 500;
 		delay(500);
 	}
 	// 0x0 = Low to turn the LED on
-	digitalWrite(WiFi_Indicator, 0x0);
+	digitalWrite(WiFi_Indicator, LOW);
 	// successfully connected to AP and return Local IP Address
 	Serial.println("");
 	Serial.print("connected! Local IP address is ");
@@ -84,9 +89,19 @@ void connect_access_point()
 
 void init_board()
 {
+	Serial.println("Wait ... Booting ESP8266 ...");
+	// init pins
+	pinMode(WiFi_Indicator, OUTPUT);
+	pinMode(Server_Indicator, OUTPUT);
+	pinMode(servo_1_pin, OUTPUT);
+	pinMode(servo_1_pin, OUTPUT);
+	pinMode(servo_1_pin, OUTPUT);
+	pinMode(main_motor_pin, OUTPUT);
+	pinMode(main_motor_direction_pin, OUTPUT);
+
 	// 0x1 = HIGH to turn LED off
-	digitalWrite(WiFi_Indicator, 0x1);
-	digitalWrite(Server_Indicator, 0x1);
+	digitalWrite(WiFi_Indicator, HIGH);
+	digitalWrite(Server_Indicator, HIGH);
 }
 
 void route()
@@ -103,23 +118,50 @@ void route()
 	server.on("/api", []() -> void {
 		if (server.args() == 4)
 		{
-			int servo_1 = server.arg("servo_1").toInt();
-			int servo_2 = server.arg("servo_2").toInt();
-			int servo_3 = server.arg("servo_3").toInt();
-			// analog output 0 ~ 255
-			// servo input 0 ~ 180
-			// formula
-			// 255 => 180;
-			// x => (x / 255) * 180
-			int servo_1_analog = servo2analog(servo_1);
-			int servo_2_analog = servo2analog(servo_2);
-			int servo_3_analog = servo2analog(servo_3);
-			String main_motor = server.arg("main_motor");
+			float servo_1 = server.arg("servo_1").toFloat();
+			float servo_2 = server.arg("servo_2").toFloat();
+			float servo_3 = server.arg("servo_3").toFloat();
+			float main_motor = server.arg("main_motor").toFloat();
+			// parse it
+			float servo_1_analog = servo2analog(servo_1);
+			float servo_2_analog = servo2analog(servo_2);
+			float servo_3_analog = servo2analog(servo_3);
+			float main_motor_analog = main2analog(main_motor);
+			// let 1 be front;
+			int main_motor_direction = (main_motor >= 0) ? 1 : 0;
 
+			Send2PinOut(servo_1_analog, servo_2_analog, servo_2_analog, main_motor_analog, main_motor_direction);
 		}
 		else
 		{
 			server.send(422, "text/html", svr_builtin::page_422(server.uri(), WiFi.localIP(), Server_Port));
 		}
 	});
+}
+
+float servo2analog(float deg) {
+	// analog output 0 ~ 255
+	// deg input 0 ~ 180
+	// 
+	// 255 => 180;
+	// x => (x / 255) * 180
+	return (deg / 255) * 180;
+}
+
+float main2analog(float threadshold) {
+	const int MAX_RANGE = 1;
+	// input range be MAX_RANGE ~ 0 ~ -MAX_RANGE
+	// motor range 0 ~ 255
+	//
+	// MAX_RANGE => 255
+	// x => ( |threadshold| / MAX_RANGE) * 255
+	return ( abs(threadshold) / MAX_RANGE ) * 255;
+}
+
+void Send2PinOut(float servo_1, float servo_2, float servo_3, float main_motor, int main_motor_direction) {
+	analogWrite(servo_1_pin, servo_1);
+	analogWrite(servo_2_pin, servo_2);
+	analogWrite(servo_3_pin, servo_3);
+	analogWrite(main_motor_pin, main_motor);
+	digitalWrite(main_motor_direction_pin, main_motor_direction);
 }
