@@ -1,26 +1,28 @@
 // codes for a mini arduino webserver to connect with submarine controller client.
 // H31iUMx49 @ 1.3.2020
 
-#include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include "includes/server_pages.h"
+#include <Servo.h>
 
-const char *ssid = "4cc3ss p0int h3r3";
-const char *password = "p@ssw0rd5 h3r3";
+Servo servo_1, servo_2, servo_3;
+
+const char *ssid = "";
+const char *password = "";
 
 const int WiFi_Indicator = 2;
 const int Server_Indicator = 16;
 const int Server_Port = 80;
 
-// change pin here
-const int servo_1_pin = 0;
-const int servo_2_pin = 0;
-const int servo_3_pin = 0;
-const int main_motor_pin = 0;
-const int main_motor_direction_pin = 0;
+// change pin 
+const uint8_t servo_1_pin = 12; // D6
+const uint8_t servo_2_pin = 14; // D5
+const uint8_t servo_3_pin = 15; // D8
+const uint8_t main_motor_pin = 4; // D2
+const int main_motor_direction_pin = 5;
 
 // init server with port
 ESP8266WebServer server(Server_Port);
@@ -38,6 +40,9 @@ void setup()
 	}
 
 	route();
+	servo_1.attach(servo_1_pin);
+	servo_2.attach(servo_2_pin);
+	servo_3.attach(servo_3_pin);
 
 	server.begin();
 	Serial.print("Server started at http://");
@@ -93,9 +98,10 @@ void init_board()
 	// init pins
 	pinMode(WiFi_Indicator, OUTPUT);
 	pinMode(Server_Indicator, OUTPUT);
-	pinMode(servo_1_pin, OUTPUT);
-	pinMode(servo_1_pin, OUTPUT);
-	pinMode(servo_1_pin, OUTPUT);
+
+	// pinMode(servo_1_pin, OUTPUT);
+	// pinMode(servo_2_pin, OUTPUT);
+	// pinMode(servo_3_pin, OUTPUT);
 	pinMode(main_motor_pin, OUTPUT);
 	pinMode(main_motor_direction_pin, OUTPUT);
 
@@ -116,52 +122,31 @@ void route()
 	});
 	// handle control requests
 	server.on("/api", []() -> void {
-		if (server.args() == 4)
+		if (server.args() <= 4)
 		{
-			float servo_1 = server.arg("servo_1").toFloat();
-			float servo_2 = server.arg("servo_2").toFloat();
-			float servo_3 = server.arg("servo_3").toFloat();
-			float main_motor = server.arg("main_motor").toFloat();
-			// parse it
-			float servo_1_analog = servo2analog(servo_1);
-			float servo_2_analog = servo2analog(servo_2);
-			float servo_3_analog = servo2analog(servo_3);
-			float main_motor_analog = main2analog(main_motor);
-			// let 1 be front;
-			int main_motor_direction = (main_motor >= 0) ? 1 : 0;
+			// int main_motor_direction = server.arg("main_motor").toInt() >= 0 ? 1 : 0;
+			// int main_motor_speed = map(server.arg("main_motor").toInt(), 0, 100, 0, 1024);
 
-			Send2PinOut(servo_1_analog, servo_2_analog, servo_2_analog, main_motor_analog, main_motor_direction);
+			// int servo_1 = map(server.arg("servo_1").toInt(), 0, 180, 0, 1024);
+			// int servo_2 = map(server.arg("servo_2").toInt(), 0, 180, 0, 1024);
+			// int servo_3 = map(server.arg("servo_3").toInt(), 0, 180, 0, 1024);
+
+			// // send to motor controller
+			// analogWrite(main_motor_pin, main_motor_speed);
+			// digitalWrite(main_motor_direction_pin, main_motor_direction);
+
+			// analogWrite(servo_1_pin, servo_1);
+			// analogWrite(servo_2_pin, servo_2);
+			// analogWrite(servo_3_pin, servo_3);
+			servo_1.write(server.arg("servo_1").toInt());
+			servo_2.write(server.arg("servo_2").toInt());
+			servo_3.write(server.arg("servo_3").toInt());
+			server.send(200, "text/plain", "accepted!");
+			Serial.println("send!");
 		}
 		else
 		{
 			server.send(422, "text/html", svr_builtin::page_422(server.uri(), WiFi.localIP(), Server_Port));
 		}
 	});
-}
-
-float servo2analog(float deg) {
-	// analog output 0 ~ 255
-	// deg input 0 ~ 180
-	// 
-	// 255 => 180;
-	// x => (x / 255) * 180
-	return (deg / 255) * 180;
-}
-
-float main2analog(float threadshold) {
-	const int MAX_RANGE = 1;
-	// input range be MAX_RANGE ~ 0 ~ -MAX_RANGE
-	// motor range 0 ~ 255
-	//
-	// MAX_RANGE => 255
-	// x => ( |threadshold| / MAX_RANGE) * 255
-	return ( abs(threadshold) / MAX_RANGE ) * 255;
-}
-
-void Send2PinOut(float servo_1, float servo_2, float servo_3, float main_motor, int main_motor_direction) {
-	analogWrite(servo_1_pin, servo_1);
-	analogWrite(servo_2_pin, servo_2);
-	analogWrite(servo_3_pin, servo_3);
-	analogWrite(main_motor_pin, main_motor);
-	digitalWrite(main_motor_direction_pin, main_motor_direction);
 }
